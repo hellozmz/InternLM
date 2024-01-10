@@ -7,8 +7,9 @@ import socket
 
 import torch
 import torch.distributed as dist
-from flash_attn.modules.mha import FlashSelfAttention, SelfAttention
+# from flash_attn.modules.mha import FlashSelfAttention, SelfAttention
 from torch.utils import benchmark
+import DeepLinkExt.ext_apply.internlm.ext_mha as ext_mha
 
 from internlm.monitor import send_alert_message
 from internlm.utils.logger import get_logger
@@ -129,7 +130,10 @@ def timer_diagnosis():
     running_time = torch.Tensor(timer.times).to(device=get_current_device())
     avg_time = running_time.detach().clone()
     if world_size <= 4:
-        dist.all_reduce(avg_time, op=torch.distributed.ReduceOp.AVG, group=gpc.get_group(ParallelMode.DATA))
+        # there is a "IndexError: map::at" error when using torch.distributed.ReduceOp.AVG
+        # so I use SUM as a walkaround.
+        dist.all_reduce(avg_time, op=torch.distributed.ReduceOp.SUM, group=gpc.get_group(ParallelMode.DATA))
+        avg_time /= world_size
     else:
         running_time_max = avg_time.detach().clone()
         running_time_min = avg_time.detach().clone()
@@ -233,7 +237,8 @@ def bench_gpu(use_flash_attn=True):
     batch_size, seqlen = 2, 1024
     nheads = dim // headdim
 
-    inner_attn = FlashSelfAttention if use_flash_attn else SelfAttention
+    inner_attn = ext_mha.DeepLinkSelfAttention
+    # inner_attn = FlashSelfAttention if use_flash_attn else SelfAttention
     inner_attn = inner_attn(causal=True, softmax_scale=None, attention_dropout=0)
 
     qkv = torch.randn(

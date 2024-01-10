@@ -9,20 +9,20 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 
-try:
-    from flash_attn.flash_attn_interface import flash_attn_unpadded_func
-except ImportError:
-    try:
-        from flash_attn.flash_attn_interface import (
-            flash_attn_unpadded_kvpacked_func as flash_attn_unpadded_func,
-        )
-    except ImportError:
-        try:
-            from flash_attn.flash_attn_interface import (
-                flash_attn_varlen_kvpacked_func as flash_attn_unpadded_func,
-            )
-        except ImportError:
-            raise ImportError("Please check your flash_attn version >= 1.0.5.")
+# try:
+#     from flash_attn.flash_attn_interface import flash_attn_unpadded_func
+# except ImportError:
+#     try:
+#         from flash_attn.flash_attn_interface import (
+#             flash_attn_unpadded_kvpacked_func as flash_attn_unpadded_func,
+#         )
+#     except ImportError:
+#         try:
+#             from flash_attn.flash_attn_interface import (
+#                 flash_attn_varlen_kvpacked_func as flash_attn_unpadded_func,
+#             )
+#         except ImportError:
+#             raise ImportError("Please check your flash_attn version >= 1.0.5.")
 
 from flash_attn.modules.mha import (
     CrossAttention,
@@ -123,7 +123,10 @@ class MHA(nn.Module):
             **factory_kwargs,
         )  # according to https://spaces.ac.cn/archives/9577
 
-        inner_attn_cls = FlashSelfAttention if use_flash_attn else SelfAttention
+        import DeepLinkExt.ext_apply.internlm.ext_mha as ext_mha
+        inner_attn_cls = ext_mha.DeepLinkSelfAttention
+        # inner_attn_cls = FlashSelfAttention if use_flash_attn else SelfAttention
+
         inner_cross_attn_cls = FlashCrossAttention if use_flash_attn else CrossAttention
         self.inner_attn = inner_attn_cls(causal=causal, softmax_scale=softmax_scale, attention_dropout=dropout)
         self.inner_cross_attn = inner_cross_attn_cls(
