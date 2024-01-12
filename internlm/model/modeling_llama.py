@@ -31,18 +31,18 @@ from internlm.utils.logger import get_logger
 from internlm.utils.registry import MODEL_INITIALIZER
 
 try:
-    from flash_attn import flash_attn_varlen_kvpacked_func
-    from flash_attn.flash_attn_interface import FlashAttnVarlenKVPackedFunc
+    # from flash_attn import flash_attn_varlen_kvpacked_func
+    # from flash_attn.flash_attn_interface import FlashAttnVarlenKVPackedFunc
     from flash_attn.modules.embedding import ParallelGPT2Embeddings
     from flash_attn.modules.mha import (
         CrossAttention,
         FlashCrossAttention,
         FlashSelfAttention,
         SelfAttention,
-        _update_kv_cache,
+        # _update_kv_cache,
     )
     from flash_attn.modules.mlp import ParallelFusedMLP
-    from flash_attn.ops.layer_norm import dropout_add_layer_norm
+    # from flash_attn.ops.layer_norm import dropout_add_layer_norm
 except ImportError:
     pass
 
@@ -148,8 +148,12 @@ class MHA(nn.Module):
             **factory_kwargs,
         )
 
-        inner_attn_cls = FlashSelfAttention if use_flash_attn else SelfAttention
-        inner_cross_attn_cls = FlashCrossAttention if use_flash_attn else CrossAttention
+        # inner_attn_cls = FlashSelfAttention if use_flash_attn else SelfAttention
+        # inner_cross_attn_cls = FlashCrossAttention if use_flash_attn else CrossAttention
+        import DeepLinkExt.ext_apply.internlm.ext_mha as ext_mha
+        inner_attn_cls = ext_mha.DeepLinkSelfAttention
+        inner_cross_attn_cls = ext_mha.DeepLinkCrossAttention
+
         self.inner_attn = inner_attn_cls(causal=causal, softmax_scale=softmax_scale, attention_dropout=dropout)
         self.inner_cross_attn = inner_cross_attn_cls(
             causal=causal, softmax_scale=softmax_scale, attention_dropout=dropout
@@ -418,8 +422,10 @@ class MHA(nn.Module):
         q = self.rotary_emb._single_forward(q, indexes=indexes)
         k = self.rotary_emb._single_forward(k, indexes=indexes)
 
+        flash_attn_varlen_kvpacked_func = self.inner_cross_attn
         if inference_params is None:
-            kv = torch.concat([k.unsqueeze(1), v.unsqueeze(1)], dim=1)
+            # kv = torch.concat([k.unsqueeze(1), v.unsqueeze(1)], dim=1)
+            kv = torch.concat([k.unsqueeze(2), v.unsqueeze(2)], dim=2)
             if self.dtype is torch.float32:
                 if q.dtype not in [torch.float16, torch.bfloat16]:
                     q = q.to(torch.bfloat16)
@@ -433,8 +439,8 @@ class MHA(nn.Module):
                         cu_seqlens_k=kwargs["cu_seqlens"],
                         max_seqlen_q=kwargs["max_seqlen"],
                         max_seqlen_k=kwargs["max_seqlen"],
-                        dropout_p=self.inner_cross_attn_dropout,
-                        softmax_scale=self.inner_cross_attn_softmax_scale,
+                        # dropout_p=self.inner_cross_attn_dropout,
+                        # softmax_scale=self.inner_cross_attn_softmax_scale,
                         causal=self.inner_cross_attn_causal,
                     ).to(self.dtype)
             else:
@@ -445,8 +451,8 @@ class MHA(nn.Module):
                     cu_seqlens_k=kwargs["cu_seqlens"],
                     max_seqlen_q=kwargs["max_seqlen"],
                     max_seqlen_k=kwargs["max_seqlen"],
-                    dropout_p=self.inner_cross_attn_dropout,
-                    softmax_scale=self.inner_cross_attn_softmax_scale,
+                    # dropout_p=self.inner_cross_attn_dropout,
+                    # softmax_scale=self.inner_cross_attn_softmax_scale,
                     causal=self.inner_cross_attn_causal,
                 )
         else:

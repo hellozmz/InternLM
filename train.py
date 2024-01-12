@@ -6,6 +6,7 @@ import time
 import traceback
 from functools import partial
 
+import torch_dipu
 import torch
 import torch.distributed as dist
 
@@ -102,7 +103,8 @@ def main(args):
         config_lines = f.readlines()
 
     # initialize loss function
-    criterion = FlashGPTLMLoss(parallel_output=True, label_smoothing=label_smoothing)
+    # criterion = FlashGPTLMLoss(parallel_output=True, label_smoothing=label_smoothing)
+    criterion = FlashGPTLMLoss(parallel_output=False, label_smoothing=label_smoothing)
 
     # initialize the train and validation data loader
     train_dl, dataset_types = get_train_data_loader(num_worker=4)
@@ -258,7 +260,7 @@ def main(args):
                 get_tflops_func=get_tflops_func,
                 logger=logger,
                 writer=writer,
-                success_update=success_update,
+                success_update=True or success_update,
                 batch_count=batch_count,
                 batch=batch,
                 train_state=train_state,

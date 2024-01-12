@@ -572,7 +572,7 @@ def record_current_batch_training_metrics(
         if gpc.config.monitor.alert.get("light_monitor_address", None) and batch_count % 50 == 0:
             send_heartbeat("train_metrics", infos)
 
-        if update_panel:
+        if False and update_panel:
             # metrics shown with dashboard panels
             panel_metrics = {
                 "step": batch_count,
