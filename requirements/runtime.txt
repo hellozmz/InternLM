@@ -15,4 +15,3 @@ torch-scatter
 pyecharts
 py-libnuma
 tensorboard
-einops
