@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from flash_attn.losses.cross_entropy import CrossEntropyLoss as FlashCrossEntropyLoss
+# from flash_attn.losses.cross_entropy import CrossEntropyLoss as FlashCrossEntropyLoss
 from torch import nn
 
 from internlm.core.context import ParallelMode
