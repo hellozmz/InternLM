@@ -3,13 +3,12 @@
 
 from typing import Tuple
 
-# import rotary_emb
+import rotary_emb
 import torch
 import torch.nn.functional as F
 from einops import rearrange
-# from flash_attn.layers.rotary import ApplyRotaryEmb as LegacyApplyRotaryEmb
-# from flash_attn.layers.rotary import ApplyRotaryEmbQKV_ as LegacyApplyRotaryEmbQKV_
-from DeepLinkExt.ext_apply.internlm.ext_apply_rotary import DeepLinkApplyRotaryEmbQKV_, DeepLinkApplyRotaryEmb
+from flash_attn.layers.rotary import ApplyRotaryEmb as LegacyApplyRotaryEmb
+from flash_attn.layers.rotary import ApplyRotaryEmbQKV_ as LegacyApplyRotaryEmbQKV_
 from torch import Tensor, nn
 
 from internlm.core.context import ParallelMode
@@ -111,12 +110,10 @@ class ApplyRotaryEmbQKV_(torch.autograd.Function):
         return dqkv, None, None, None, None
 
 
-# apply_rotary_emb_qkv_ = ApplyRotaryEmbQKV_.apply
-# legacy_apply_rotary_embed_qkv = LegacyApplyRotaryEmbQKV_.apply
-# legacy_apply_rotary_embed = LegacyApplyRotaryEmb.apply
-apply_rotary_emb_qkv_ = DeepLinkApplyRotaryEmbQKV_.apply
-legacy_apply_rotary_embed_qkv = DeepLinkApplyRotaryEmbQKV_.apply
-legacy_apply_rotary_embed = DeepLinkApplyRotaryEmb.apply
+apply_rotary_emb_qkv_ = ApplyRotaryEmbQKV_.apply
+legacy_apply_rotary_embed_qkv = LegacyApplyRotaryEmbQKV_.apply
+legacy_apply_rotary_embed = LegacyApplyRotaryEmb.apply
+
 
 class RotaryEmbedding(torch.nn.Module):
     """

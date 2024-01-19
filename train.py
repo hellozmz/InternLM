@@ -10,6 +10,7 @@ import torch_dipu
 import torch
 import torch.distributed as dist
 
+import patch_deeplinkext
 import internlm
 from internlm.core.context import ParallelMode
 from internlm.core.context import global_context as gpc

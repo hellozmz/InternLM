@@ -35,17 +35,16 @@ try:
     # from flash_attn.flash_attn_interface import FlashAttnVarlenKVPackedFunc
     from flash_attn.modules.embedding import ParallelGPT2Embeddings
     from flash_attn.modules.mha import (
-        # CrossAttention,
-        # FlashCrossAttention,
-        # FlashSelfAttention,
-        # SelfAttention,
+        CrossAttention,
+        FlashCrossAttention,
+        FlashSelfAttention,
+        SelfAttention,
         _update_kv_cache,
     )
     from flash_attn.modules.mlp import ParallelFusedMLP
     # from flash_attn.ops.layer_norm import dropout_add_layer_norm
 except ImportError:
     pass
-import DeepLinkExt.ext_apply.internlm.ext_mha as ext_mha
 
 MODEL_TYPE = "LLAMA2"
 
@@ -149,11 +148,8 @@ class MHA(nn.Module):
             **factory_kwargs,
         )
 
-        # inner_attn_cls = FlashSelfAttention if use_flash_attn else SelfAttention
-        # inner_cross_attn_cls = FlashCrossAttention if use_flash_attn else CrossAttention
-        inner_attn_cls = ext_mha.DeepLinkSelfAttention
-        inner_cross_attn_cls = ext_mha.DeepLinkCrossAttention
-
+        inner_attn_cls = FlashSelfAttention if use_flash_attn else SelfAttention
+        inner_cross_attn_cls = FlashCrossAttention if use_flash_attn else CrossAttention
         self.inner_attn = inner_attn_cls(causal=causal, softmax_scale=softmax_scale, attention_dropout=dropout)
         self.inner_cross_attn = inner_cross_attn_cls(
             causal=causal, softmax_scale=softmax_scale, attention_dropout=dropout

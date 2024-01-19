@@ -7,9 +7,8 @@ import socket
 
 import torch
 import torch.distributed as dist
-# from flash_attn.modules.mha import FlashSelfAttention, SelfAttention
+from flash_attn.modules.mha import FlashSelfAttention, SelfAttention
 from torch.utils import benchmark
-import DeepLinkExt.ext_apply.internlm.ext_mha as ext_mha
 
 from internlm.monitor import send_alert_message
 from internlm.utils.logger import get_logger
@@ -237,8 +236,7 @@ def bench_gpu(use_flash_attn=True):
     batch_size, seqlen = 2, 1024
     nheads = dim // headdim
 
-    # inner_attn = FlashSelfAttention if use_flash_attn else SelfAttention
-    inner_attn = ext_mha.DeepLinkSelfAttention
+    inner_attn = FlashSelfAttention if use_flash_attn else SelfAttention
     inner_attn = inner_attn(causal=True, softmax_scale=None, attention_dropout=0)
 
     qkv = torch.randn(
