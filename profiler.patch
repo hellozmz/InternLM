@@ -1,0 +1,165 @@
+diff --git a/internlm/train/training_internlm.py b/internlm/train/training_internlm.py
+index 474bfd2..3e6a5e5 100644
+--- a/internlm/train/training_internlm.py
++++ b/internlm/train/training_internlm.py
+@@ -380,17 +380,20 @@ def initialize_llm_profile(profiling: bool = False, start_time: str = None):
+         llm_profile = torch.profiler.profile
+         logger.info(f"Do profiling in rank {gpc.get_global_rank()}!")
+     else:
+-        llm_profile = DummyProfile
++        # llm_profile = DummyProfile
++        import unittest.mock
++        llm_profile = unittest.mock.MagicMock(torch.profiler.profile)
+ 
+     return llm_profile(
+         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+         schedule=torch.profiler.schedule(skip_first=5, wait=1, warmup=1, active=1, repeat=1),
+-        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+-            f"RUN/{gpc.config.JOB_NAME}/{start_time}/traces/rank{gpc.get_global_rank()}_"
+-            + f"dp{gpc.get_local_rank(ParallelMode.DATA)}_"
+-            + f"tp{gpc.get_local_rank(ParallelMode.TENSOR)}_"
+-            + f"pp{gpc.get_local_rank(ParallelMode.PIPELINE)}",
+-        ),
++        # on_trace_ready=torch.profiler.tensorboard_trace_handler(
++        #     f"RUN/{gpc.config.JOB_NAME}/{start_time}/traces/rank{gpc.get_global_rank()}_"
++        #     + f"dp{gpc.get_local_rank(ParallelMode.DATA)}_"
++        #     + f"tp{gpc.get_local_rank(ParallelMode.TENSOR)}_"
++        #     + f"pp{gpc.get_local_rank(ParallelMode.PIPELINE)}",
++        # ),
++        record_shapes=True,
+         with_stack=True,
+         with_modules=True,
+     )
+diff --git a/log/merge_trace_tsv.py b/log/merge_trace_tsv.py
+new file mode 100644
+index 0000000..d552201
+--- /dev/null
++++ b/log/merge_trace_tsv.py
+@@ -0,0 +1,72 @@
++from io import TextIOWrapper
++import sys
++
++
++def merge_trace_csv(
++    torch_trace: TextIOWrapper, dipu_trace: TextIOWrapper, merged_trace: TextIOWrapper
++):
++    NC = 11
++    VNC = NC - 1
++    EMPTY_VALUES = [""] * VNC
++    headers = []
++    oheaders = []
++    torch_values = {}
++    dipu_values = {}
++
++    is_header = True
++    for torch_line in torch_trace.readlines():
++        torch_line = torch_line.strip()
++        if not torch_line:
++            continue
++        words = torch_line.split("\t")
++        if is_header:
++            headers = words
++            assert len(headers) == NC
++            assert headers[0] == "Name"
++            oheaders.append(headers[0])
++            oheaders += ["torch " + h for h in headers[1:]]
++            oheaders += ["dipu " + h for h in headers[1:]]
++            is_header = False
++            continue
++        torch_values[words[0]] = words[1:]
++
++    is_header = True
++    for dipu_line in dipu_trace.readlines():
++        dipu_line = dipu_line.strip()
++        if not dipu_line:
++            continue
++        words = dipu_line.split("\t")
++        if is_header:
++            assert words == headers
++            is_header = False
++            continue
++        dipu_values[words[0]] = words[1:]
++
++    print("\t".join(oheaders), file=merged_trace)
++    names = set(torch_values.keys()) | set(dipu_values.keys())
++    both_lines = []
++    torch_only_lines = []
++    dipu_only_lines = []
++
++    for name in names:
++        torch_value = torch_values.get(name)
++        dipu_value = dipu_values.get(name)
++        if torch_value and dipu_value:
++            both_lines.append([name] + torch_value + dipu_value)
++        elif torch_value:
++            torch_only_lines.append([name] + torch_value + EMPTY_VALUES)
++        elif dipu_value:
++            dipu_only_lines.append([name] + EMPTY_VALUES + dipu_value)
++        else:
++            raise RuntimeError("Unreachable")
++
++    for lines in [both_lines, torch_only_lines, dipu_only_lines]:
++        for line in lines:
++            print("\t".join(line), file=merged_trace)
++
++
++if __name__ == "__main__":
++    with open(sys.argv[1], "r") as torch_trace, open(
++        sys.argv[2], "r"
++    ) as dipu_trace, open(sys.argv[3], "w") as merged_trace:
++        merge_trace_csv(torch_trace, dipu_trace, merged_trace)
+diff --git a/log/trace2tsv.py b/log/trace2tsv.py
+new file mode 100644
+index 0000000..808c8cd
+--- /dev/null
++++ b/log/trace2tsv.py
+@@ -0,0 +1,18 @@
++from io import TextIOWrapper
++import re
++import sys
++
++
++def trace2csv(trace_file: TextIOWrapper, csv_file: TextIOWrapper):
++    NC = 11
++    KEEP_COL = list(range(10)) + [10]
++    for line in trace_file.readlines():
++        words = re.split(r"\s{2,}", line.strip())
++        if len(words) < NC or re.match(r"^-+$", words[0]) is not None:
++            continue
++        print("\t".join([words[i] for i in KEEP_COL]), file=csv_file)
++
++
++if __name__ == "__main__":
++    with open(sys.argv[1], "r") as trace_file, open(sys.argv[2], "w") as csv_file:
++        trace2csv(trace_file, csv_file)
+diff --git a/train.py b/train.py
+index 6874f9e..6592053 100644
+--- a/train.py
++++ b/train.py
+@@ -191,7 +191,8 @@ def main(args):
+     # transfer the train data loader into train data iterator
+     train_iter = iter(train_dl)
+ 
+-    with initialize_llm_profile(profiling=args.profiling, start_time=current_time) as prof:
++    total_steps = 20
++    with initialize_llm_profile(profiling=True, start_time=current_time) as prof:
+         # start iterating the train data and begin training
+         for batch_count in range(train_state.batch_count, total_steps):
+             empty_cache_and_diag(batch_count, interval=gpc.config.data.empty_cache_and_diag_interval)
+@@ -298,6 +299,16 @@ def main(args):
+             if batch_count % 2 == 0:
+                 prof.step()
+ 
++    # PERF: LLJBASH_PROFILE_HERE (for grep)
++    profile_output = prof.key_averages().table(row_limit=-1)
++    is_dipu = hasattr(torch.Tensor, "is_dipu")
++    trace_name = "{}_llama2_7b_ckpt_profile".format("dipu" if is_dipu else "torch")
++    if isinstance(profile_output, str):
++        with open(f"log/{trace_name}.txt", "w") as f:
++            print(profile_output, file=f)
++    prof.export_chrome_trace(f"log/{trace_name}.json")
++
++
+     ckpt_manager.wait_async_upload_finish()
+ 
+ 
