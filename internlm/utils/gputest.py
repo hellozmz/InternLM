@@ -93,8 +93,9 @@ def get_gpu_temperature():
         gpu_id = -1
 
     if GPUtil is not None and gpu_id >= 0:
-        gpus = GPUtil.getGPUs()
-        gpu_temperature = gpus[gpu_id].temperature
+        # gpus = GPUtil.getGPUs()
+        # gpu_temperature = gpus[gpu_id].temperature
+        gpu_temperature = -1
     else:
         gpu_temperature = -1
 
@@ -105,7 +106,8 @@ def get_cpu_temperature():
     """Get current CPU temperature."""
 
     if psutil is not None:
-        cpu_temperature = psutil.sensors_temperatures()["coretemp"][0].current
+        # cpu_temperature = psutil.sensors_temperatures()["coretemp"][0].current
+        cpu_temperature = -1
     else:
         cpu_temperature = -1
 

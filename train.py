@@ -8,6 +8,7 @@ from functools import partial
 
 import torch
 import torch.distributed as dist
+import torch_dipu
 
 import deeplink_ext.patch_internlm
 import internlm
@@ -193,6 +194,9 @@ def main(args):
     # transfer the train data loader into train data iterator
     train_iter = iter(train_dl)
 
+    if args.profiling:
+        native_prof = torch_dipu.profiler.NativeProfile("./profile_result", False) # 设置成True，会记录callstack，导致cpu占用过多，对性能分析影响大，导致结果失真
+        index = 0
     with initialize_llm_profile(profiling=args.profiling, start_time=current_time) as prof:
         # start iterating the train data and begin training
         for batch_count in range(train_state.batch_count, total_steps):
@@ -299,6 +303,13 @@ def main(args):
 
             if batch_count % 2 == 0:
                 prof.step()
+                index += 1
+                if index == 140 and args.profiling:
+                    print("start native profiler", flush=True)
+                    native_prof.__enter__()
+                if index == 141 and args.profiling:
+                    print("end native profiler", flush=True)
+                    native_prof.__exit__(None, None, None)
 
     ckpt_manager.wait_async_upload_finish()
 
